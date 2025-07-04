@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Traffic Management Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .signal-card { min-width: 350px; margin-bottom: 2rem; }
+        .video-feed { width: 100%; height: 220px; object-fit: cover; border-radius: 8px; border: 2px solid #333; background-color: #000; /* Fallback for no video */ }
+        .signal-status { font-size: 1.2rem; font-weight: bold; }
+        .congestion-low { color: #27ae60; }
+        .congestion-moderate { color: #f39c12; }
+        .congestion-high { color: #e74c3c; }
+        .congestion-severe { color: #c0392b; }
+        .vehicle-counts span { margin-right: 10px; }
+    </style>
+</head>
+<body class="bg-light">
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>🚦 Smart Traffic Management Dashboard</h2>
+        <button id="emergency-toggle" class="btn btn-danger">Toggle Emergency Mode</button>
+    </div>
+    <div class="mb-4">
+        <form id="video-upload-form" enctype="multipart/form-data">
+            <label for="video-signal-id" class="form-label">Select Signal:</label>
+            <select id="video-signal-id" class="form-select" style="width:auto;display:inline-block;">
+                <!-- Options will be populated by JS -->
+            </select>
+            <input type="file" id="video-file" name="video" accept="video/*" class="form-control" style="width:auto;display:inline-block;">
+            <button type="submit" class="btn btn-primary">Upload Video</button>
+        </form>
+    </div>
+    <div class="row" id="signals-row">
+        </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+const congestionClass = {
+    'LOW': 'congestion-low',
+    'MODERATE': 'congestion-moderate',
+    'HIGH': 'congestion-high',
+    'SEVERE': 'congestion-severe'
+};
+
+// Function to create initial signal card HTML (used only once)
+function createSignalCardHtml(signal) {
+    const signalChar = String.fromCharCode(65 + signal.signal_id);
+    const congestion = signal.congestion_level || 'LOW';
+    return `
+        <div class="col-md-6 col-lg-4" id="signal-card-${signal.signal_id}">
+            <div class="card signal-card shadow-sm">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <span>Signal ${signalChar}</span>
+                    <span class="signal-status" data-signal-id="${signal.signal_id}" data-field="current_state">${signal.current_state}</span>
+                </div>
+                <img class="video-feed mt-2" src="/video_feed/${signal.signal_id}/" alt="Video Feed for Signal ${signalChar}">
+                <div class="card-body">
+                    <div class="mb-2">
+                        <span class="fw-bold">Time Left:</span> <span data-signal-id="${signal.signal_id}" data-field="remaining_time">${signal.remaining_time.toFixed(1)}s</span>
+                    </div>
+                    <div class="mb-2 vehicle-counts">
+                        <span title="Total Vehicles">🚗 <b data-signal-id="${signal.signal_id}" data-field="vehicle_count">${signal.vehicle_count}</b></span>
+                        <span title="Traffic Weight">⚖️ <b data-signal-id="${signal.signal_id}" data-field="traffic_weight">${signal.traffic_weight.toFixed(1)}</b></span>
+                    </div>
+                    <div class="mb-2">
+                        <span class="fw-bold">Congestion:</span>
+                        <span data-signal-id="${signal.signal_id}" data-field="congestion_level" class="${congestionClass[congestion]}">${congestion}</span>
+                    </div>
+                    <div class="mb-2 vehicle-type-counts-display">
+                        <span class="fw-bold">Vehicle Types:</span>
+                        <span title="Autos">🛺 <span data-signal-id="${signal.signal_id}" data-type="auto">${signal.vehicle_type_counts.auto || 0}</span></span>
+                        <span title="Bikes">🏍️ <span data-signal-id="${signal.signal_id}" data-type="bike">${signal.vehicle_type_counts.bike || 0}</span></span>
+                        <span title="Buses">🚌 <span data-signal-id="${signal.signal_id}" data-type="bus">${signal.vehicle_type_counts.bus || 0}</span></span>
+                        <span title="Cars">🚗 <span data-signal-id="${signal.signal_id}" data-type="car">${signal.vehicle_type_counts.car || 0}</span></span>
+                        <span title="Emergency">🚑 <span data-signal-id="${signal.signal_id}" data-type="emergency_vehicles">${signal.vehicle_type_counts.emergency_vehicles || 0}</span></span>
+                        <span title="Trucks">🚚 <span data-signal-id="${signal.signal_id}" data-type="truck">${signal.vehicle_type_counts.truck || 0}</span></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Function to update existing signal cards (called repeatedly)
+function updateSignalData(signals) {
+    signals.forEach(signal => {
+        // Find the existing card for this signal_id
+        const $signalCard = $(`#signal-card-${signal.signal_id}`);
+
+        if ($signalCard.length) { // Check if the card exists
+            // Update specific fields using data attributes
+            $signalCard.find(`[data-field="current_state"]`).text(signal.current_state);
+            $signalCard.find(`[data-field="remaining_time"]`).text(`${signal.remaining_time.toFixed(1)}s`);
+            $signalCard.find(`[data-field="vehicle_count"]`).text(signal.vehicle_count);
+            $signalCard.find(`[data-field="traffic_weight"]`).text(signal.traffic_weight.toFixed(1));
+            
+            // Update congestion and its class
+            const congestion = signal.congestion_level || 'LOW';
+            const $congestionSpan = $signalCard.find(`[data-field="congestion_level"]`);
+            $congestionSpan.text(congestion);
+            // Remove all existing congestion classes and add the new one
+            Object.values(congestionClass).forEach(cls => $congestionSpan.removeClass(cls));
+            $congestionSpan.addClass(congestionClass[congestion]);
+
+            // Update vehicle type counts
+            for (const type in signal.vehicle_type_counts) {
+                $signalCard.find(`[data-type="${type}"]`).text(signal.vehicle_type_counts[type] || 0);
+            }
+        } else {
+            // If a new signal appears, add its card (though usually signals are static)
+            $('#signals-row').append(createSignalCardHtml(signal));
+        }
+    });
+}
+
+// Populate signal select dropdown after fetching signals
+function populateSignalDropdown(signals) {
+    const $select = $('#video-signal-id');
+    $select.empty();
+    signals.forEach(signal => {
+        $select.append(`<option value="${signal.signal_id}">Signal ${String.fromCharCode(65 + signal.signal_id)}</option>`);
+    });
+}
+
+// After initial fetch, populate dropdown
+function fetchAndRenderInitialSignals() {
+    $.get('/api/signals/', function(data) {
+        let initialHtml = '';
+        data.signals.forEach(signal => {
+            initialHtml += createSignalCardHtml(signal);
+        });
+        $('#signals-row').html(initialHtml);
+        populateSignalDropdown(data.signals); // Populate dropdown here
+    }).fail(function(jqXHR, textStatus, errorThrown) {
+        console.error("Error fetching initial signals:", textStatus, errorThrown);
+    });
+}
+
+// Subsequent fetches to update data
+function fetchAndUpdateSignals() {
+    $.get('/api/signals/', function(data) {
+        updateSignalData(data.signals); // Update data in existing cards
+    }).fail(function(jqXHR, textStatus, errorThrown) {
+        console.error("Error fetching updates:", textStatus, errorThrown);
+    });
+}
+
+// Handle video upload
+$('#video-upload-form').on('submit', function(e) {
+    e.preventDefault();
+    const signalId = $('#video-signal-id').val();
+    const fileInput = $('#video-file')[0];
+    if (!fileInput.files.length) {
+        alert('Please select a video file.');
+        return;
+    }
+    const formData = new FormData();
+    formData.append('video_file', fileInput.files[0]);
+    formData.append('signal_id', signalId);
+
+    $.ajax({
+        url: '/api/upload_video/',
+        type: 'POST',
+        data: formData,
+        processData: false,
+        contentType: false,
+        success: function(resp) {
+            alert('Video uploaded successfully!');
+        },
+        error: function(xhr, status, error) {
+            alert('Video upload failed: ' + (xhr.responseJSON?.error || error));
+        }
+    });
+});
+
+$(document).ready(function() {
+    // 1. Fetch and render all signal cards for the first time
+    fetchAndRenderInitialSignals();
+
+    // 2. Set interval to fetch and update ONLY the dynamic data
+    setInterval(fetchAndUpdateSignals, 1500); // Poll every 1.5s
+
+    $('#emergency-toggle').click(function() {
+        $.get('/api/emergency/', function(data) {
+            if (data.emergency_mode) {
+                $('#emergency-toggle').removeClass('btn-danger').addClass('btn-success').text('Emergency Mode ON');
+            } else {
+                $('#emergency-toggle').removeClass('btn-success').addClass('btn-danger').text('Toggle Emergency Mode');
+            }
+        }).fail(function(jqXHR, textStatus, errorThrown) {
+            console.error("Error toggling emergency mode:", textStatus, errorThrown);
+            alert("Failed to toggle emergency mode. Check console for details.");
+        });
+    });
+});
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

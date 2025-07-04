@@ -1,0 +1,6 @@
+[14868] 01 Jul 08:33:08.957 * Redis 3.0.504 (00000000/0) 64 bit, standalone mode, port 6379, pid 14868 ready to start.
+[14868] 01 Jul 08:33:08.957 # Server started, Redis version 3.0.504
+[14868] 01 Jul 08:33:08.964 * The server is now ready to accept connections on port 6379
+[5352] 02 Jul 00:50:51.234 * Redis 3.0.504 (00000000/0) 64 bit, standalone mode, port 6379, pid 5352 ready to start.
+[5352] 02 Jul 00:50:51.250 # Server started, Redis version 3.0.504
+[5352] 02 Jul 00:50:51.252 * The server is now ready to accept connections on port 6379
