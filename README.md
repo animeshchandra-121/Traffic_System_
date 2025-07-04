@@ -36,7 +36,7 @@ traffic_system/
 ## Features
 - Video upload, processing, and analytics
 - Real-time traffic data management
-- Machine learning model integration (PyTorch)
+- Machine learning model integration (YoLo)
 - Media storage and management
 - React-based dashboard and analytics frontend
 - Redis support for caching or real-time features
@@ -53,7 +53,7 @@ traffic_system/
      ```
    - Install Django and other dependencies:
      ```bash
-     pip install django djangorestframework torch opencv-python redis
+     pip install django djangorestframework opencv-python redis
      ```
    - (Add other dependencies as needed)
 
